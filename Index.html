@@ -3,105 +3,118 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Playtime - 3D Mechanics</title>
+    <title>Web Playtime - Puzzle Map</title>
     <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            background-color: #000;
-        }
-        /* A simple crosshair to help you aim the Raycaster */
+        body { margin: 0; overflow: hidden; background-color: #000; }
         #crosshair {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 10px;
-            height: 10px;
-            background-color: rgba(255, 255, 255, 0.5);
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
-            pointer-events: none;
-            z-index: 100;
+            position: absolute; top: 50%; left: 50%; width: 10px; height: 10px;
+            background-color: white; border-radius: 50%;
+            transform: translate(-50%, -50%); pointer-events: none; z-index: 100;
         }
         #instructions {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            color: white;
-            font-family: sans-serif;
-            pointer-events: none;
-            background: rgba(0,0,0,0.5);
-            padding: 10px;
-            border-radius: 5px;
+            position: absolute; top: 10px; left: 10px; color: white;
+            font-family: sans-serif; pointer-events: none;
+            background: rgba(0,0,0,0.8); padding: 15px; border-radius: 5px; z-index: 100;
         }
     </style>
+    
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
 </head>
 <body>
     <div id="crosshair"></div>
     <div id="instructions">
-        <strong>Click to Start</strong><br>
-        WASD to Move | SPACE to Jump<br>
-        <strong>Click and Hold</strong> on the red box to pull it!
+        <strong>Click screen to Start</strong><br><br>
+        <strong>WASD</strong> to Move | <strong>SPACE</strong> to Jump<br>
+        <strong>Click & Hold</strong> to grab the Blue Power Cell.<br>
+        Drop it near the Yellow Generator to open the door!
     </div>
 
     <script type="module">
-        import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
-        import { PointerLockControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/PointerLockControls.js';
+        import * as THREE from 'three';
+        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
-        // --- 1. SCENE SETUP ---
+        // --- 1. SCENE & BRIGHT LIGHTING ---
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x050505);
-        scene.fog = new THREE.Fog(0x050505, 0, 15);
+        scene.background = new THREE.Color(0x111111); // Dark grey, not pitch black
+        scene.fog = new THREE.Fog(0x111111, 5, 40);
 
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.y = 1.6;
+        camera.position.set(0, 1.6, 10); // Start player further back
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.shadowMap.enabled = true;
         document.body.appendChild(renderer.domElement);
 
-        // --- 2. LIGHTING (Flashlight) ---
-        const ambientLight = new THREE.AmbientLight(0x111111);
+        // BRIGHT Ambient Light so you can see the map instantly
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
         scene.add(ambientLight);
 
-        const flashLight = new THREE.SpotLight(0xffffff, 2, 20, Math.PI / 6, 0.5, 1);
-        flashLight.castShadow = true;
-        camera.add(flashLight);
-        flashLight.position.set(0, 0, 1);
-        flashLight.target = new THREE.Object3D();
-        flashLight.target.position.set(0, 0, -1);
-        camera.add(flashLight.target);
-        scene.add(camera);
-
-        // --- 3. ENVIRONMENT & OBJECTS ---
-        const floorGeo = new THREE.PlaneGeometry(100, 100);
-        const floorMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+        // --- 2. THE MAP (Walls & Floor) ---
+        const mapObjects = [];
+        
+        // Floor
+        const floorGeo = new THREE.PlaneGeometry(50, 50);
+        const floorMat = new THREE.MeshBasicMaterial({ color: 0x222222 });
         const floor = new THREE.Mesh(floorGeo, floorMat);
         floor.rotation.x = -Math.PI / 2;
-        floor.receiveShadow = true;
         scene.add(floor);
 
+        // Wall Function
+        function createWall(x, y, z, width, height, depth, color) {
+            const geo = new THREE.BoxGeometry(width, height, depth);
+            const mat = new THREE.MeshBasicMaterial({ color: color });
+            const wall = new THREE.Mesh(geo, mat);
+            wall.position.set(x, y, z);
+            scene.add(wall);
+            mapObjects.push(wall);
+            return wall;
+        }
+
+        // Build the Room
+        createWall(-10, 5, 0, 1, 10, 30, 0x444444); // Left Wall
+        createWall(10, 5, 0, 1, 10, 30, 0x444444);  // Right Wall
+        createWall(0, 5, 15, 21, 10, 1, 0x444444);  // Back Wall (behind player)
+        
+        // The Wall with the Doorway
+        createWall(-6, 5, -5, 9, 10, 1, 0x333333);  // Left side of door
+        createWall(6, 5, -5, 9, 10, 1, 0x333333);   // Right side of door
+        createWall(0, 8, -5, 4, 4, 1, 0x333333);    // Above door
+
+        // The Sliding Door
+        const door = createWall(0, 3, -5, 4, 6, 0.5, 0x882222); // Red door
+
+        // --- 3. THE PUZZLE ELEMENTS ---
         const interactableObjects = [];
 
-        // The Puzzle Box
-        const boxGeo = new THREE.BoxGeometry(2, 2, 2);
-        const boxMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-        const puzzleBox = new THREE.Mesh(boxGeo, boxMat);
-        puzzleBox.position.set(0, 1, -8);
-        puzzleBox.castShadow = true;
-        scene.add(puzzleBox);
-        interactableObjects.push(puzzleBox);
+        // Blue Power Cell (The thing you grab)
+        const cellGeo = new THREE.BoxGeometry(1, 1, 1);
+        const cellMat = new THREE.MeshBasicMaterial({ color: 0x0055ff });
+        const powerCell = new THREE.Mesh(cellGeo, cellMat);
+        powerCell.position.set(5, 0.5, 5); // Right side of the room
+        scene.add(powerCell);
+        interactableObjects.push(powerCell);
 
-        // --- 4. PLAYER MOVEMENT CONTROLS ---
+        // Yellow Generator (Where the cell needs to go)
+        const genGeo = new THREE.BoxGeometry(2, 2, 2);
+        const genMat = new THREE.MeshBasicMaterial({ color: 0xaaaa00 });
+        const generator = new THREE.Mesh(genGeo, genMat);
+        generator.position.set(-8, 1, 5); // Left side of the room
+        scene.add(generator);
+
+        // --- 4. CONTROLS ---
         const controls = new PointerLockControls(camera, document.body);
         document.addEventListener('click', () => { controls.lock(); });
 
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, canJump = false;
         const velocity = new THREE.Vector3();
         const direction = new THREE.Vector3();
-        const speed = 40.0;
-        const mass = 100.0;
 
         document.addEventListener('keydown', (e) => {
             switch (e.code) {
@@ -122,57 +135,42 @@
             }
         });
 
-        // --- 5. GRABPACK MECHANICS (Raycaster & Pulling) ---
+        // --- 5. GRABPACK MECHANICS ---
         const raycaster = new THREE.Raycaster();
         const screenCenter = new THREE.Vector2(0, 0);
-        const wireMaterial = new THREE.LineBasicMaterial({ color: 0x0000ff, linewidth: 2 });
+        const wireMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 });
         
         let activeWire = null;
         let grabbedObject = null;
         let isPulling = false;
+        let puzzleSolved = false;
 
-        document.addEventListener('mousedown', (e) => {
+        document.addEventListener('mousedown', () => {
             if (!controls.isLocked) return;
-            
             raycaster.setFromCamera(screenCenter, camera);
             const intersects = raycaster.intersectObjects(interactableObjects);
 
             if (intersects.length > 0) {
                 grabbedObject = intersects[0].object;
-                grabbedObject.material.color.setHex(0x00ff00); // Turn green when grabbed
                 isPulling = true;
-                createWire(intersects[0].point);
+                
+                const startPoint = new THREE.Vector3(1, -0.5, -1).applyMatrix4(camera.matrixWorld);
+                const wireGeo = new THREE.BufferGeometry().setFromPoints([startPoint, intersects[0].point]);
+                activeWire = new THREE.Line(wireGeo, wireMaterial);
+                scene.add(activeWire);
             }
         });
 
         document.addEventListener('mouseup', () => {
             isPulling = false;
-            if (grabbedObject) {
-                grabbedObject.material.color.setHex(0xff0000); // Return to red
-                grabbedObject = null;
-            }
+            grabbedObject = null;
             if (activeWire) {
                 scene.remove(activeWire);
                 activeWire = null;
             }
         });
 
-        function createWire(targetPoint) {
-            const startPoint = new THREE.Vector3(1, -1, -2).applyMatrix4(camera.matrixWorld);
-            const wireGeo = new THREE.BufferGeometry().setFromPoints([startPoint, targetPoint]);
-            activeWire = new THREE.Line(wireGeo, wireMaterial);
-            scene.add(activeWire);
-        }
-
-        function updateWire() {
-            if (activeWire && grabbedObject) {
-                const startPoint = new THREE.Vector3(1, -1, -2).applyMatrix4(camera.matrixWorld);
-                // Update the wire geometry to stretch between the player and the moving box
-                activeWire.geometry.setFromPoints([startPoint, grabbedObject.position]);
-            }
-        }
-
-        // --- 6. GAME LOOP ---
+        // --- 6. GAME LOOP & PUZZLE LOGIC ---
         const clock = new THREE.Clock();
 
         function animate() {
@@ -183,44 +181,59 @@
                 // Movement Math
                 velocity.x -= velocity.x * 10.0 * delta;
                 velocity.z -= velocity.z * 10.0 * delta;
-                velocity.y -= 9.8 * mass * delta; 
+                velocity.y -= 9.8 * 50.0 * delta; // Gravity
 
                 direction.z = Number(moveForward) - Number(moveBackward);
                 direction.x = Number(moveRight) - Number(moveLeft);
                 direction.normalize();
 
-                if (moveForward || moveBackward) velocity.z -= direction.z * speed * delta;
-                if (moveLeft || moveRight) velocity.x -= direction.x * speed * delta;
+                if (moveForward || moveBackward) velocity.z -= direction.z * 40.0 * delta;
+                if (moveLeft || moveRight) velocity.x -= direction.x * 40.0 * delta;
 
                 controls.moveRight(-velocity.x * delta);
                 controls.moveForward(-velocity.z * delta);
                 controls.getObject().position.y += (velocity.y * delta);
 
-                // Floor Collision
                 if (controls.getObject().position.y < 1.6) {
                     velocity.y = 0;
                     controls.getObject().position.y = 1.6;
                     canJump = true;
                 }
 
-                // --- PULLING PHYSICS ---
+                // GrabPack Pulling
                 if (isPulling && grabbedObject) {
-                    // Find a target position just in front of the player
                     const targetPos = new THREE.Vector3(0, 0, -3).applyMatrix4(camera.matrixWorld);
-                    targetPos.y = 1; // Keep the box resting on the ground
-                    
-                    // .lerp smoothly moves the object toward the target position over time
+                    targetPos.y = 0.5; // Keep it on the floor
                     grabbedObject.position.lerp(targetPos, 5 * delta);
+
+                    // Update Wire visuals
+                    if (activeWire) {
+                        const startPoint = new THREE.Vector3(1, -0.5, -1).applyMatrix4(camera.matrixWorld);
+                        activeWire.geometry.setFromPoints([startPoint, grabbedObject.position]);
+                    }
+                }
+
+                // PUZZLE LOGIC: Check distance between Power Cell and Generator
+                if (!puzzleSolved) {
+                    // Calculate distance
+                    const distance = powerCell.position.distanceTo(generator.position);
                     
-                    // Visually update the wire so it stays attached while pulling
-                    updateWire();
+                    // If the cell is dropped or dragged close enough to the generator (within 3 units)
+                    if (distance < 3 && !isPulling) {
+                        puzzleSolved = true;
+                        // Snap the power cell into the generator
+                        powerCell.position.set(-8, 2.5, 5); 
+                    }
+                }
+
+                // If puzzle is solved, slide the red door up!
+                if (puzzleSolved && door.position.y < 10) {
+                    door.position.y += 2 * delta; 
                 }
             }
-
             renderer.render(scene, camera);
         }
 
-        // Handle window resizing
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
